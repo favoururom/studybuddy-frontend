@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Buddy - AI Tutor</title>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- Mammoth.js for DOCX -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+    <!-- Custom Styles for Flip Animation -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 transition-colors duration-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- ICONS ---
+        const Icons = {
+            BookOpen: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>,
+            Brain: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375" /><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" /><path d="M3.477 10.896a4 4 0 0 1 .585-.396" /><path d="M19.938 10.5a4 4 0 0 1 .585.396" /><path d="M6 18a4 4 0 0 1-1.97-1.364" /><path d="M19.97 16.636A4 4 0 0 1 18 18" /></svg>,
+            Layers: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>,
+            CheckCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>,
+            Upload: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
+            Sparkles: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>,
+            ChevronLeft: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>,
+            ChevronRight: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>,
+            RotateCcw: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>,
+            X: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>,
+            Settings: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>,
+            AlertTriangle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>,
+            FileText: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></svg>,
+        };
+
+        // --- FILE PARSING SERVICE ---
+        const FileService = {
+            async parsePDF(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + "\n";
+                }
+                return fullText;
+            },
+
+            async parseDOCX(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                return result.value;
+            },
+
+            async extractText(file) {
+                if (file.type === 'application/pdf') {
+                    return this.parsePDF(file);
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    return this.parseDOCX(file);
+                } else if (file.type === 'text/plain') {
+                    return await file.text();
+                } else {
+                    throw new Error("Unsupported file type. Please upload PDF, DOCX, or TXT.");
+                }
+            }
+        };
+
+        // --- REAL AI SERVICE ---
+        const AIService = {
+            async generateStudyMaterial(apiKey, preferredModel, text, subject, onStatusUpdate) {
+                const prompt = `
+                    You are "Study Buddy", an expert academic AI tutor. 
+                    Analyze the following study material (Subject: ${subject}) and generate a structured study guide.
+                    
+                    Return ONLY a valid JSON object with this exact schema:
+                    {
+                        "summary": {
+                            "bullets": ["string", "string"],
+                            "keyConcepts": [{"term": "string", "def": "string"}],
+                            "examFocus": ["string", "string"]
+                        },
+                        "flashcards": [
+                            {"id": 1, "front": "Question?", "back": "Answer", "difficulty": "easy|medium|hard"}
+                        ],
+                        "quiz": [
+                            {
+                                "id": 1,
+                                "type": "mcq",
+                                "question": "Question text?",
+                                "options": ["Option A", "Option B", "Option C", "Option D"],
+                                "answer": "Option B"
+                            }
+                        ]
+                    }
+
+                    Ensure the content is accurate, educational, and directly derived from the source text.
+                    Create at least 5 flashcards and 5 quiz questions.
+
+                    SOURCE TEXT:
+                    ${text.substring(0, 30000)} 
+                `;
+
+                // List of models to try. Removed 1.0-pro as it doesn't support JSON mode well.
+                const fallbackModels = [
+                    'gemini-1.5-flash',
+                    'gemini-1.5-flash-001',
+                    'gemini-1.5-flash-002',
+                    'gemini-1.5-pro',
+                    'gemini-1.5-flash-8b'
+                ];
+
+                // Ensure preferred model is first, and remove duplicates
+                const uniqueModels = [...new Set([preferredModel, ...fallbackModels])];
+
+                let firstError = null;
+
+                for (const model of uniqueModels) {
+                    try {
+                        const msg = `Attempting with ${model}...`;
+                        console.log(msg);
+                        if (onStatusUpdate) onStatusUpdate(msg);
+
+                        // Gemini API Endpoint
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: prompt }] }],
+                                generationConfig: {
+                                    responseMimeType: "application/json"
+                                }
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            const msg = errorData.error?.message || `HTTP ${response.status} (${response.statusText})`;
+                            throw new Error(msg);
+                        }
+
+                        const data = await response.json();
+                        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (!jsonText) throw new Error("No text generated.");
+
+                        return JSON.parse(jsonText);
+
+                    } catch (error) {
+                        const errMsg = `Model ${model} failed: ${error.message}`;
+                        console.warn(errMsg);
+                        if (onStatusUpdate) onStatusUpdate(errMsg + " Retrying...");
+
+                        if (!firstError) firstError = error;
+                    }
+                }
+
+                // Throw the FIRST error to reveal the root cause (e.g. Quota/Key)
+                const finalErrorMsg = firstError?.message || 'Unknown error';
+                throw new Error(`Generation Failed: ${finalErrorMsg}. (Tried ${uniqueModels.length} models)`);
+            }
+        };
+
+
+        // --- COMPONENTS ---
+
+        const Button = ({ children, onClick, variant = 'primary', className = '', disabled, icon: Icon }) => {
+            const baseStyle = "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+            const variants = {
+                primary: "bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-500/30 focus:ring-primary-500 border border-transparent",
+                secondary: "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm focus:ring-slate-200",
+                ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                outline: "border-2 border-primary-100 text-primary-600 hover:border-primary-200 hover:bg-primary-50",
+                danger: "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+            };
+
+            return (
+                <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+                    {Icon && <Icon className="w-4 h-4" />}
+                    {children}
+                </button>
+            );
+        };
+
+        const Card = ({ children, className = '' }) => (
+            <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>
+                {children}
+            </div>
+        );
+
+        const Badge = ({ children, color = 'blue' }) => {
+            const colors = {
+                blue: 'bg-blue-100 text-blue-800',
+                green: 'bg-green-100 text-green-800',
+                indigo: 'bg-indigo-100 text-indigo-800',
+                purple: 'bg-purple-100 text-purple-800',
+            };
+            return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[color]}`}>{children}</span>;
+        };
+
+        const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, model, setModel }) => {
+            const [inputKey, setInputKey] = useState(apiKey || '');
+            const [selectedModel, setSelectedModel] = useState(model || 'gemini-1.5-flash');
+
+            const handleSave = () => {
+                setApiKey(inputKey);
+                setModel(selectedModel);
+                onClose();
+            };
+
+            const models = [
+                { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fastest)' },
+                { id: 'gemini-1.5-flash-002', name: 'Gemini 1.5 Flash-002 (Stable)' },
+                { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Smarter)' },
+                { id: 'gemini-1.0-pro', name: 'Gemini 1.0 Pro (Standard)' },
+            ];
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+                    <Card className="w-full max-w-md p-6 m-4 shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-slate-900">Settings</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><Icons.X /></button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Google Gemini API Key</label>
+                                <input
+                                    type="password"
+                                    value={inputKey}
+                                    onChange={(e) => setInputKey(e.target.value)}
+                                    placeholder="AIzaSy..."
+                                    className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                />
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-primary-600 hover:underline">Get one for free here</a>.
+                                    The key is stored locally in your browser.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">AI Model</label>
+                                <select
+                                    value={selectedModel}
+                                    onChange={(e) => setSelectedModel(e.target.value)}
+                                    className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                                >
+                                    {models.map(m => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    If "Flash" fails, try "Gemini 1.5 Pro" or "Gemini 1.0 Pro".
+                                </p>
+                            </div>
+
+                            <div className="pt-2 flex justify-end gap-2">
+                                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                                <Button onClick={handleSave}>Save Settings</Button>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        const InputSection = ({ onGenerate, loading, openSettings }) => {
+            const [text, setText] = useState('');
+            const [subject, setSubject] = useState('');
+            const [fileName, setFileName] = useState('');
+            const [isParsing, setIsParsing] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setFileName(file.name);
+                setIsParsing(true);
+                setText("Parsing file...");
+
+                try {
+                    const extractedText = await FileService.extractText(file);
+                    setText(extractedText.trim());
+                } catch (err) {
+                    alert("Error reading file: " + err.message);
+                    setText("");
+                    setFileName("");
+                } finally {
+                    setIsParsing(false);
+                }
+            };
+
+            const subjects = ["Biology", "History", "Physics", "Chemistry", "Law", "Literature", "Programming", "General"];
+
+            return (
+                <div className="max-w-3xl mx-auto space-y-6 animate-fade-in relative">
+                    <div className="text-center space-y-2 mb-8">
+                        <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl mb-2">
+                            Transform your notes into <span className="text-primary-600">mastery.</span>
+                        </h1>
+                        <p className="text-lg text-slate-600 max-w-xl mx-auto">
+                            Paste your study material or upload a file (PDF/DOCX) to generate summaries and quizzes.
+                        </p>
+                    </div>
+
+                    <Card className="p-1">
+                        <div className="p-4">
+                            <textarea
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                                placeholder="Paste your notes here..."
+                                disabled={isParsing}
+                                className="w-full h-64 p-4 text-base text-slate-700 placeholder:text-slate-400 bg-slate-50 border-none rounded-lg resize-none focus:ring-2 focus:ring-primary-100 focus:bg-white transition-all"
+                            />
+
+                            {fileName && (
+                                <div className="mt-2 text-xs text-primary-600 flex items-center gap-1">
+                                    <Icons.FileText className="w-3 h-3" />
+                                    Loaded from: {fileName}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between mt-4 md:flex-row flex-col gap-4">
+                                <div className="flex gap-2 w-full md:w-auto">
+                                    <div className="relative">
+                                        <select
+                                            value={subject}
+                                            onChange={(e) => setSubject(e.target.value)}
+                                            className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 py-2.5 px-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm font-medium cursor-pointer"
+                                        >
+                                            <option value="" disabled>Subject</option>
+                                            {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        accept=".pdf,.docx,.txt"
+                                        onChange={handleFileChange}
+                                    />
+                                    <Button variant="secondary" onClick={() => fileInputRef.current?.click()} icon={Icons.Upload} disabled={isParsing}>
+                                        {isParsing ? 'Reading...' : 'Upload'}
+                                    </Button>
+                                </div>
+
+                                <div className="flex items-center gap-3 text-sm text-slate-400 w-full md:w-auto justify-end">
+                                    <span className="hidden sm:inline">{text.length} chars</span>
+                                    <Button onClick={() => onGenerate(text, subject)} disabled={loading || text.length < 50} icon={Icons.Sparkles} className="px-6 w-full md:w-auto">
+                                        Generate
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        const LoadingState = ({ status }) => (
+            <div className="max-w-2xl mx-auto mt-20 text-center space-y-6">
+                <div className="relative w-24 h-24 mx-auto">
+                    <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-primary-500 rounded-full border-t-transparent animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Icons.Brain className="w-8 h-8 text-primary-500 animate-pulse" />
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <h3 className="text-xl font-semibold text-slate-900">Analysing your materials...</h3>
+                    <p className="text-slate-500">Connecting to Gemini AI.</p>
+                    {status && <p className="text-sm font-mono text-primary-600 bg-primary-50 inline-block px-3 py-1 rounded-full animate-pulse">{status}</p>}
+                </div>
+            </div>
+        );
+
+        const SummaryView = ({ data }) => (
+            <div className="space-y-6 animate-fade-in-up">
+                <div className="flex gap-4 flex-col md:flex-row">
+                    <Card className="flex-1 p-6">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                            <Icons.Layers className="w-5 h-5 text-primary-500" />
+                            Smart Summary
+                        </h3>
+                        <ul className="space-y-3">
+                            {data.summary.bullets.map((bullet, i) => (
+                                <li key={i} className="flex gap-3 text-slate-600 leading-relaxed">
+                                    <span className="text-primary-400 mt-1.5">•</span>
+                                    {bullet}
+                                </li>
+                            ))}
+                        </ul>
+                    </Card>
+
+                    <div className="md:w-80 space-y-4">
+                        <Card className="p-5 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+                            <h4 className="font-semibold text-indigo-900 mb-3 text-sm uppercase tracking-wide">Exam Focus</h4>
+                            <ul className="space-y-2">
+                                {data.summary.examFocus.map((item, i) => (
+                                    <li key={i} className="flex gap-2 text-indigo-800 text-sm">
+                                        <Icons.CheckCircle className="w-4 h-4 text-indigo-500 shrink-0" />
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
+
+                        <Card className="p-5">
+                            <h4 className="font-semibold text-slate-900 mb-3 text-sm uppercase tracking-wide">Key Definitions</h4>
+                            <dl className="space-y-3">
+                                {data.summary.keyConcepts.map((c, i) => (
+                                    <div key={i}>
+                                        <dt className="font-medium text-slate-900">{c.term}</dt>
+                                        <dd className="text-sm text-slate-500">{c.def}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </Card>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const FlashcardDeck = ({ cards }) => {
+            const [current, setCurrent] = useState(0);
+            const [flipped, setFlipped] = useState(false);
+
+            const next = () => {
+                setFlipped(false);
+                setTimeout(() => setCurrent(c => (c + 1) % cards.length), 200);
+            };
+
+            const prev = () => {
+                setFlipped(false);
+                setTimeout(() => setCurrent(c => (c - 1 + cards.length) % cards.length), 200);
+            };
+
+            return (
+                <div className="max-w-xl mx-auto py-8">
+                    <div className="mb-6 flex justify-between items-center text-sm text-slate-500">
+                        <span>Card {current + 1} of {cards.length}</span>
+                        <div className="flex gap-2">
+                            <Badge color={cards[current].difficulty === 'easy' ? 'green' : cards[current].difficulty === 'medium' ? 'blue' : 'purple'}>
+                                {cards[current].difficulty?.toUpperCase() || 'GENERAL'}
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <div
+                        className="relative h-80 w-full cursor-pointer perspective-1000 group"
+                        onClick={() => setFlipped(!flipped)}
+                    >
+                        <div className={`relative w-full h-full text-center transition-transform duration-500 transform-style-3d shadow-xl rounded-2xl ${flipped ? 'rotate-y-180' : ''}`}>
+                            <div className="absolute inset-0 w-full h-full bg-white rounded-2xl border-2 border-slate-100 p-8 flex flex-col items-center justify-center backface-hidden">
+                                <span className="text-xs font-semibold tracking-wider text-slate-400 absolute top-6 left-6">QUESTION</span>
+                                <h3 className="text-xl font-medium text-slate-800 leading-snug">{cards[current].front}</h3>
+                                <span className="text-sm text-slate-400 absolute bottom-6 animate-bounce">Click to flip</span>
+                            </div>
+                            <div className="absolute inset-0 w-full h-full bg-slate-900 rounded-2xl p-8 flex flex-col items-center justify-center backface-hidden rotate-y-180">
+                                <span className="text-xs font-semibold tracking-wider text-slate-500 absolute top-6 left-6">ANSWER</span>
+                                <p className="text-lg text-white font-medium">{cards[current].back}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-center items-center gap-6 mt-10">
+                        <Button variant="secondary" onClick={prev} icon={Icons.ChevronLeft}>Prev</Button>
+                        <Button variant="secondary" onClick={() => setFlipped(!flipped)} icon={Icons.RotateCcw}>Flip</Button>
+                        <Button variant="primary" onClick={next} className="flex-row-reverse" icon={Icons.ChevronRight}>Next</Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const QuizEngine = ({ questions }) => {
+            const [answers, setAnswers] = useState({});
+            const [showResults, setShowResults] = useState(false);
+
+            const handleSelect = (qId, option) => {
+                if (showResults) return;
+                setAnswers(prev => ({ ...prev, [qId]: option }));
+            };
+
+            const calculateScore = () => {
+                let score = 0;
+                questions.forEach(q => {
+                    if (answers[q.id] === q.answer) score++;
+                });
+                return score;
+            };
+
+            if (showResults) {
+                const score = calculateScore();
+                const percentage = Math.round((score / questions.length) * 100);
+
+                return (
+                    <div className="max-w-lg mx-auto text-center py-10 animate-fade-in">
+                        <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 text-green-600 mb-6">
+                                <span className="text-2xl font-bold">{percentage}%</span>
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Quiz Completed!</h2>
+                            <p className="text-slate-600 mb-8">You got {score} out of {questions.length} correct.</p>
+                            <Button onClick={() => { setAnswers({}); setShowResults(false); }}>Retake Quiz</Button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-2xl mx-auto space-y-8">
+                    {questions.map((q, idx) => (
+                        <Card key={q.id} className="p-6">
+                            <h4 className="text-lg font-medium text-slate-900 mb-4">
+                                <span className="text-slate-400 mr-2">{idx + 1}.</span> {q.question}
+                            </h4>
+                            <div className="space-y-2">
+                                {q.options && q.options.map(opt => {
+                                    const isSelected = answers[q.id] === opt;
+                                    return (
+                                        <button
+                                            key={opt}
+                                            onClick={() => handleSelect(q.id, opt)}
+                                            className={`w-full text-left p-3 rounded-lg border transition-all ${isSelected ? 'bg-primary-50 border-primary-500 text-primary-700 ring-1 ring-primary-500' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </Card>
+                    ))}
+                    <div className="flex justify-end pt-4">
+                        <Button onClick={() => setShowResults(true)} disabled={Object.keys(answers).length < questions.length}>Submit Quiz</Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('input');
+            const [loading, setLoading] = useState(false);
+            const [status, setStatus] = useState('');
+            const [data, setData] = useState(null);
+            const [activeTab, setActiveTab] = useState('summary');
+            const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
+            const [model, setModel] = useState(() => localStorage.getItem('GEMINI_MODEL') || 'gemini-1.5-flash');
+            const [showSettings, setShowSettings] = useState(false);
+
+            useEffect(() => {
+                if (apiKey) localStorage.setItem('GEMINI_API_KEY', apiKey);
+                if (model) localStorage.setItem('GEMINI_MODEL', model);
+            }, [apiKey, model]);
+
+            const handleGenerate = async (text, subject) => {
+                if (!apiKey) {
+                    setShowSettings(true);
+                    return;
+                }
+
+                setLoading(true);
+                setStatus('Initializing...');
+                try {
+                    const result = await AIService.generateStudyMaterial(apiKey, model, text, subject, setStatus);
+                    setData(result);
+                    setView('results');
+                } catch (e) {
+                    alert("Generation Failed: " + e.message);
+                } finally {
+                    setLoading(false);
+                    setStatus('');
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-12">
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setView('input'); setData(null); }}>
+                                <div className="bg-primary-600 text-white p-1.5 rounded-lg">
+                                    <Icons.Brain className="w-6 h-6" />
+                                </div>
+                                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-700 to-indigo-600">StudyBuddy</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" icon={Icons.Settings} onClick={() => setShowSettings(true)}>Settings</Button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {loading ? <LoadingState status={status} /> : view === 'input' ? (
+                            <InputSection onGenerate={handleGenerate} loading={loading} />
+                        ) : (
+                            <div className="space-y-8">
+                                <div className="flex justify-center">
+                                    <div className="bg-slate-100 p-1 rounded-xl inline-flex shadow-inner">
+                                        {[{ id: 'summary', icon: Icons.Layers }, { id: 'flashcards', icon: Icons.RotateCcw }, { id: 'quiz', icon: Icons.BookOpen }].map(tab => (
+                                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>
+                                                <tab.icon className="w-4 h-4" />
+                                                {tab.id.charAt(0).toUpperCase() + tab.id.slice(1)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="animate-fade-in">
+                                    {activeTab === 'summary' && <SummaryView data={data} />}
+                                    {activeTab === 'flashcards' && <FlashcardDeck cards={data.flashcards} />}
+                                    {activeTab === 'quiz' && <QuizEngine questions={data.quiz} />}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <SettingsModal
+                        isOpen={showSettings}
+                        onClose={() => setShowSettings(false)}
+                        apiKey={apiKey}
+                        setApiKey={setApiKey}
+                        model={model}
+                        setModel={setModel}
+                    />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
